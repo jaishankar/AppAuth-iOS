@@ -19,6 +19,10 @@
 
 @class OIDAuthorizationRequest;
 @class OIDAuthorizationResponse;
+
+@class OIDEndSessionRequest;
+@class OIDEndSessionResponse;
+
 @class OIDAuthState;
 @class OIDRegistrationResponse;
 @class OIDTokenResponse;
@@ -47,6 +51,9 @@ typedef void (^OIDAuthStateAction)(NSString *_Nullable accessToken,
     @param error The error if an error occurred.
  */
 typedef void (^OIDAuthStateAuthorizationCallback)(OIDAuthState *_Nullable authState,
+                                                  NSError *_Nullable error);
+
+typedef void (^OIDAuthStateEndSessionCallback)(OIDEndSessionResponse *_Nullable endSessionResponse,
                                                   NSError *_Nullable error);
 
 /*! @brief A convenience class that retains the auth state between @c OIDAuthorizationResponse%s
@@ -153,6 +160,11 @@ typedef void (^OIDAuthStateAuthorizationCallback)(OIDAuthState *_Nullable authSt
     authStateByPresentingAuthorizationRequest:(OIDAuthorizationRequest *)authorizationRequest
                                 UICoordinator:(id<OIDExternalUserAgentUICoordinator>)UICoordinator
                                      callback:(OIDAuthStateAuthorizationCallback)callback;
+
++ (id<OIDExternalUserAgentFlowSession, OIDAuthorizationFlowSession>)
+    authStateByPresentingEndSessionRequest:(OIDEndSessionRequest *)endSessionRequest
+                             UICoordinator:(id<OIDExternalUserAgentUICoordinator>)UICoordinator
+                                  callback:(OIDAuthStateEndSessionCallback)callback;
 
 /*! @internal
     @brief Unavailable. Please use @c initWithAuthorizationResponse:.

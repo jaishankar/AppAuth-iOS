@@ -40,6 +40,12 @@ NS_ASSUME_NONNULL_BEGIN
     presentAuthorizationRequest:(OIDAuthorizationRequest *)request
        presentingViewController:(UIViewController *)presentingViewController
                        callback:(OIDAuthorizationCallback)callback;
+
++ (id<OIDExternalUserAgentFlowSession, OIDAuthorizationFlowSession>)
+    presentEndSessionRequest:(OIDEndSessionRequest *)request
+    presentingViewController:(UIViewController *)presentingViewController
+                    callback:(OIDEndSessionCallback)callback;
+
 @end
 
 NS_ASSUME_NONNULL_END

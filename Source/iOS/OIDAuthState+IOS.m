@@ -33,4 +33,15 @@
                                                 callback:callback];
 }
 
++ (id<OIDExternalUserAgentFlowSession, OIDAuthorizationFlowSession>)
+authStateByPresentingEndSessionRequest:(OIDEndSessionRequest *)endSessionRequest
+presentingViewController:(UIViewController *)presentingViewController
+callback:(OIDAuthStateEndSessionCallback)callback {
+  OIDExternalUserAgentUICoordinatorIOS *coordinator = [[OIDExternalUserAgentUICoordinatorIOS alloc]
+                                                       initWithPresentingViewController:presentingViewController];
+  return [self authStateByPresentingEndSessionRequest:endSessionRequest
+                                           UICoordinator:coordinator
+                                                callback:callback];
+}
+
 @end

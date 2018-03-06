@@ -20,6 +20,10 @@
 
 #import "OIDAuthorizationRequest.h"
 #import "OIDAuthorizationResponse.h"
+
+#import "OIDEndSessionRequest.h"
+#import "OIDEndSessionResponse.h"
+
 #import "OIDDefines.h"
 #import "OIDErrorUtilities.h"
 #import "OIDAuthorizationFlowSession.h"
@@ -45,13 +49,18 @@ NS_ASSUME_NONNULL_BEGIN
 @interface OIDAuthorizationFlowSessionImplementation : NSObject<OIDExternalUserAgentFlowSession, OIDAuthorizationFlowSession> {
   // private variables
   OIDAuthorizationRequest *_request;
+  OIDEndSessionRequest *_endSessionRequest;
   id<OIDExternalUserAgentUICoordinator> _UICoordinator;
   OIDAuthorizationCallback _pendingauthorizationFlowCallback;
+  OIDEndSessionCallback _pendingEndSessionFlowCallback;
 }
 
 - (instancetype)init NS_UNAVAILABLE;
 
 - (instancetype)initWithRequest:(OIDAuthorizationRequest *)request
+    NS_DESIGNATED_INITIALIZER;
+
+- (instancetype)initWithEndSessionRequest:(OIDEndSessionRequest *)request
     NS_DESIGNATED_INITIALIZER;
 
 @end
@@ -64,6 +73,14 @@ NS_ASSUME_NONNULL_BEGIN
     _request = [request copy];
   }
   return self;
+}
+
+- (instancetype)initWithEndSessionRequest:(OIDEndSessionRequest *)request {
+    self = [super init];
+    if (self) {
+        _endSessionRequest = [request copy];
+    }
+    return self;
 }
 
 - (void)presentAuthorizationWithCoordinator:(id<OIDExternalUserAgentUICoordinator>)UICoordinator
@@ -80,6 +97,20 @@ NS_ASSUME_NONNULL_BEGIN
   }
 }
 
+- (void)presentEndSessionWithCoordinator:(id<OIDExternalUserAgentUICoordinator>)UICoordinator
+                                   callback:(OIDEndSessionCallback)endSessionFlowCallback {
+    _UICoordinator = UICoordinator;
+    _pendingEndSessionFlowCallback = endSessionFlowCallback;
+    BOOL endSessionFlowStarted =
+    [_UICoordinator presentExternalUserAgentRequest:_endSessionRequest session:self];
+    if (!endSessionFlowStarted) {
+        NSError *safariError = [OIDErrorUtilities errorWithCode:OIDErrorCodeSafariOpenError
+                                                underlyingError:nil
+                                                    description:@"Unable to open Safari."];
+        [self didFinishWithResponse:nil error:safariError];
+    }
+}
+
 - (void)cancel {
   [_UICoordinator dismissExternalUserAgentUIAnimated:YES completion:^{
       NSError *error = [OIDErrorUtilities
@@ -93,6 +124,21 @@ NS_ASSUME_NONNULL_BEGIN
 - (BOOL)shouldHandleURL:(NSURL *)URL {
   NSURL *standardizedURL = [URL standardizedURL];
   NSURL *standardizedRedirectURL = [_request.redirectURL standardizedURL];
+  //NSURL *standardizedRedirectURL = nil;
+
+  if (_pendingauthorizationFlowCallback) {
+    standardizedRedirectURL = [_request.redirectURL standardizedURL];
+  } else if(_pendingEndSessionFlowCallback){
+    standardizedRedirectURL = [_endSessionRequest.postLogoutRedirectURL standardizedURL];
+  }
+  
+  NSLog(@"stdURL scheme:%@, stdRedirectURL scheme: %@ ", standardizedURL.scheme, standardizedRedirectURL.scheme);
+  NSLog(@"stdURL user:%@, stdRedirectURL user: %@ ", standardizedURL.user, standardizedRedirectURL.user);
+  NSLog(@"stdURL password:%@, stdRedirectURL password: %@ ", standardizedURL.password, standardizedRedirectURL.password);
+  NSLog(@"stdURL host:%@, stdRedirectURL host: %@ ", standardizedURL.host, standardizedRedirectURL.host);
+  NSLog(@"stdURL port:%@, stdRedirectURL port: %@ ", standardizedURL.port, standardizedRedirectURL.port);
+  NSLog(@"stdURL path:%@, stdRedirectURL path: %@ ", standardizedURL.path, standardizedRedirectURL.path);
+
 
   return OIDIsEqualIncludingNil(standardizedURL.scheme, standardizedRedirectURL.scheme) &&
       OIDIsEqualIncludingNil(standardizedURL.user, standardizedRedirectURL.user) &&
@@ -108,53 +154,99 @@ NS_ASSUME_NONNULL_BEGIN
     return NO;
   }
   // checks for an invalid state
-  if (!_pendingauthorizationFlowCallback) {
+  if (!_pendingauthorizationFlowCallback && !_pendingEndSessionFlowCallback) {
     [NSException raise:OIDOAuthExceptionInvalidAuthorizationFlow
                 format:@"%@", OIDOAuthExceptionInvalidAuthorizationFlow, nil];
   }
 
-  OIDURLQueryComponent *query = [[OIDURLQueryComponent alloc] initWithURL:URL];
 
-  NSError *error;
-  OIDAuthorizationResponse *response = nil;
+  if (_pendingauthorizationFlowCallback) {
+    OIDURLQueryComponent *query = [[OIDURLQueryComponent alloc] initWithURL:URL];
 
-  // checks for an OAuth error response as per RFC6749 Section 4.1.2.1
-  if (query.dictionaryValue[OIDOAuthErrorFieldError]) {
-    error = [OIDErrorUtilities OAuthErrorWithDomain:OIDOAuthAuthorizationErrorDomain
-                                      OAuthResponse:query.dictionaryValue
-                                    underlyingError:nil];
-  }
+    NSError *error;
+    OIDAuthorizationResponse *response = nil;
 
-  // no error, should be a valid OAuth 2.0 response
-  if (!error) {
-    response = [[OIDAuthorizationResponse alloc] initWithRequest:_request
-                                                      parameters:query.dictionaryValue];
+    // checks for an OAuth error response as per RFC6749 Section 4.1.2.1
+    if (query.dictionaryValue[OIDOAuthErrorFieldError]) {
+      error = [OIDErrorUtilities OAuthErrorWithDomain:OIDOAuthAuthorizationErrorDomain
+                                        OAuthResponse:query.dictionaryValue
+                                      underlyingError:nil];
+    }
+
+    // no error, should be a valid OAuth 2.0 response
+    if (!error) {
+      response = [[OIDAuthorizationResponse alloc] initWithRequest:_request
+                                                        parameters:query.dictionaryValue];
       
-    // verifies that the state in the response matches the state in the request, or both are nil
-    if (!OIDIsEqualIncludingNil(_request.state, response.state)) {
-      NSMutableDictionary *userInfo = [query.dictionaryValue mutableCopy];
-      userInfo[NSLocalizedDescriptionKey] =
-        [NSString stringWithFormat:@"State mismatch, expecting %@ but got %@ in authorization "
-                                   "response %@",
-                                   _request.state,
-                                   response.state,
-                                   response];
-      response = nil;
-      error = [NSError errorWithDomain:OIDOAuthAuthorizationErrorDomain
-                                  code:OIDErrorCodeOAuthAuthorizationClientError
-                              userInfo:userInfo];
-      }
-  }
+      // verifies that the state in the response matches the state in the request, or both are nil
+      if (!OIDIsEqualIncludingNil(_request.state, response.state)) {
+        NSMutableDictionary *userInfo = [query.dictionaryValue mutableCopy];
+        userInfo[NSLocalizedDescriptionKey] =
+          [NSString stringWithFormat:@"State mismatch, expecting %@ but got %@ in authorization "
+                                     "response %@",
+                                     _request.state,
+                                     response.state,
+                                     response];
+        response = nil;
+        error = [NSError errorWithDomain:OIDOAuthAuthorizationErrorDomain
+                                    code:OIDErrorCodeOAuthAuthorizationClientError
+                                userInfo:userInfo];
+        }
+    }
 
-  [_UICoordinator dismissExternalUserAgentUIAnimated:YES completion:^{
-      [self didFinishWithResponse:response error:error];
-  }];
+    [_UICoordinator dismissExternalUserAgentUIAnimated:YES completion:^{
+        [self didFinishWithResponse:response error:error];
+    }];
+  }
+  
+  if (_pendingEndSessionFlowCallback) {
+    OIDURLQueryComponent *query = [[OIDURLQueryComponent alloc] initWithURL:URL];
+    
+    NSError *error;
+    OIDEndSessionResponse *response = nil;
+    
+    // checks for an OAuth error response as per RFC6749 Section 4.1.2.1
+    if (query.dictionaryValue[OIDOAuthErrorFieldError]) {
+      error = [OIDErrorUtilities OAuthErrorWithDomain:OIDOAuthAuthorizationErrorDomain
+                                        OAuthResponse:query.dictionaryValue
+                                      underlyingError:nil];
+    }
+    
+    // no error, should be a valid OAuth 2.0 response
+    if (!error) {
+      response = [[OIDEndSessionResponse alloc] initWithRequest:_endSessionRequest
+                                                        parameters:query.dictionaryValue];
+      
+      // verifies that the state in the response matches the state in the request, or both are nil
+      if (!OIDIsEqualIncludingNil(_endSessionRequest.state, response.state)) {
+        NSMutableDictionary *userInfo = [query.dictionaryValue mutableCopy];
+        userInfo[NSLocalizedDescriptionKey] =
+        [NSString stringWithFormat:@"State mismatch, expecting %@ but got %@ in end session "
+         "response %@",
+         _endSessionRequest.state,
+         response.state,
+         response];
+        response = nil;
+        error = [NSError errorWithDomain:OIDOAuthAuthorizationErrorDomain
+                                    code:OIDErrorCodeOAuthAuthorizationClientError
+                                userInfo:userInfo];
+      }
+    }
+    
+    [_UICoordinator dismissExternalUserAgentUIAnimated:YES completion:^{
+      [self didFinishEndSessionWithResponse:response error:error];
+    }];
+  }
 
   return YES;
 }
 
 - (void)failExternalUserAgentFlowWithError:(NSError *)error {
-  [self didFinishWithResponse:nil error:error];
+  if (_pendingauthorizationFlowCallback) {
+    [self didFinishWithResponse:nil error:error];
+  } else {
+    [self didFinishEndSessionWithResponse:nil error:error];
+  }
 }
 
 /*! @brief Invokes the pending callback and performs cleanup.
@@ -171,8 +263,20 @@ NS_ASSUME_NONNULL_BEGIN
   }
 }
 
+- (void)didFinishEndSessionWithResponse:(nullable OIDEndSessionResponse *)response
+                                  error:(nullable NSError *)error {
+  OIDEndSessionCallback callback = _pendingEndSessionFlowCallback;
+  _pendingEndSessionFlowCallback = nil;
+  _UICoordinator = nil;
+  if (callback) {
+    dispatch_async(dispatch_get_main_queue(), ^{
+      callback(response, error);
+    });
+  }
+}
+
 - (void)failAuthorizationFlowWithError:(NSError *)error {
-  [self failAuthorizationFlowWithError:error];
+  [self failExternalUserAgentFlowWithError:error];
 }
 
 - (BOOL)resumeAuthorizationFlowWithURL:(NSURL *)URL {
@@ -261,6 +365,27 @@ NS_ASSUME_NONNULL_BEGIN
       [[OIDAuthorizationFlowSessionImplementation alloc] initWithRequest:request];
   [flowSession presentAuthorizationWithCoordinator:UICoordinator callback:callback];
   return flowSession;
+}
+
++ (id<OIDExternalUserAgentFlowSession, OIDAuthorizationFlowSession>)
+presentEndSessionRequest:(OIDEndSessionRequest *)request
+UICoordinator:(id<OIDExternalUserAgentUICoordinator>)UICoordinator
+callback:(OIDEndSessionCallback)callback {
+    
+    OIDAuthorizationFlowSessionImplementation *flowSession =
+    [[OIDAuthorizationFlowSessionImplementation alloc] initWithEndSessionRequest:request];
+    [flowSession presentEndSessionWithCoordinator:UICoordinator callback:callback];
+    return flowSession;
+//    _UICoordinator = UICoordinator;
+//    _pendingauthorizationFlowCallback = authorizationFlowCallback;
+//    BOOL authorizationFlowStarted =
+//    [_UICoordinator presentExternalUserAgentRequest:request session:self];
+//    if (!authorizationFlowStarted) {
+//        NSError *safariError = [OIDErrorUtilities errorWithCode:OIDErrorCodeSafariOpenError
+//                                                underlyingError:nil
+//                                                    description:@"Unable to open Safari."];
+//        [self didFinishWithResponse:nil error:safariError];
+//    }
 }
 
 #pragma mark - Token Endpoint

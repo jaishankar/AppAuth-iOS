@@ -184,4 +184,14 @@ static NSString *const OIDMissingEndSessionEndpointMessage =
     return [query URLByReplacingQueryInURL:_configuration.discoveryDocument.endSessionEndpoint];
 }
 
+#pragma mark - OIDExternalUserAgentRequest
+
+- (NSURL *)externalUserAgentRequestURL {
+  return [self endSessionRequestURL];
+}
+
+- (NSString *)redirectScheme {
+  return [[self postLogoutRedirectURL] scheme];
+}
+
 @end

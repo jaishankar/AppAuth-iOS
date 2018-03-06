@@ -21,6 +21,8 @@
 @class OIDAuthorization;
 @class OIDAuthorizationRequest;
 @class OIDAuthorizationResponse;
+@class OIDEndSessionRequest;
+@class OIDEndSessionResponse;
 @class OIDRegistrationRequest;
 @class OIDRegistrationResponse;
 @class OIDServiceConfiguration;
@@ -47,6 +49,9 @@ typedef void (^OIDDiscoveryCallback)(OIDServiceConfiguration *_Nullable configur
  */
 typedef void (^OIDAuthorizationCallback)(OIDAuthorizationResponse *_Nullable authorizationResponse,
                                          NSError *_Nullable error);
+
+typedef void (^OIDEndSessionCallback)(OIDEndSessionResponse *_Nullable endSessionResponse,
+                                  NSError *_Nullable error);
 
 /*! @brief Represents the type of block used as a callback for various methods of
         @c OIDAuthorizationService.
@@ -124,6 +129,11 @@ typedef void (^OIDRegistrationCompletion)(OIDRegistrationResponse *_Nullable reg
     presentAuthorizationRequest:(OIDAuthorizationRequest *)request
                   UICoordinator:(id<OIDExternalUserAgentUICoordinator>)UICoordinator
                        callback:(OIDAuthorizationCallback)callback;
+
++ (id<OIDExternalUserAgentFlowSession, OIDAuthorizationFlowSession>)
+    presentEndSessionRequest:(OIDEndSessionRequest *)request
+               UICoordinator:(id<OIDExternalUserAgentUICoordinator>)UICoordinator
+                    callback:(OIDEndSessionCallback)callback;
 
 /*! @brief Performs a token request.
     @param request The token request.

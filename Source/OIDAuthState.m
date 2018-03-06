@@ -24,6 +24,7 @@
 #import "OIDAuthorizationResponse.h"
 #import "OIDAuthorizationService.h"
 #import "OIDDefines.h"
+#import "OIDEndSessionRequest.h"
 #import "OIDError.h"
 #import "OIDErrorUtilities.h"
 #import "OIDRegistrationResponse.h"
@@ -103,6 +104,28 @@ static const NSUInteger kExpiryTimeTolerance = 60;
 @synthesize errorDelegate = _errorDelegate;
 
 #pragma mark - Convenience initializers
+
++ (id<OIDExternalUserAgentFlowSession, OIDAuthorizationFlowSession>)
+      authStateByPresentingEndSessionRequest:(OIDEndSessionRequest *)endSessionRequest
+                               UICoordinator:(id<OIDExternalUserAgentUICoordinator>)UICoordinator
+                                    callback:(OIDEndSessionCallback)callback {
+    // presents the authorization request
+    id<OIDExternalUserAgentFlowSession, OIDAuthorizationFlowSession> authFlowSession =
+    [OIDAuthorizationService presentEndSessionRequest:endSessionRequest
+                                           UICoordinator:UICoordinator
+                                                callback:^(OIDEndSessionResponse *_Nullable endSessionResponse,
+                                                           NSError *_Nullable authorizationError) {
+        // inspects response and processes further if needed (e.g. authorization
+        // code exchange)
+        if (endSessionResponse) {
+            callback(endSessionResponse, nil);
+        } else {
+            callback(nil, authorizationError);
+        }
+    }];
+    return authFlowSession;
+}
+
 
 + (id<OIDExternalUserAgentFlowSession, OIDAuthorizationFlowSession>)
     authStateByPresentingAuthorizationRequest:(OIDAuthorizationRequest *)authorizationRequest

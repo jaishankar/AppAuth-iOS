@@ -33,6 +33,16 @@ NS_ASSUME_NONNULL_BEGIN
   return [self presentAuthorizationRequest:request UICoordinator:coordinator callback:callback];
 }
 
++ (id<OIDExternalUserAgentFlowSession, OIDAuthorizationFlowSession>)
+    presentEndSessionRequest:(OIDEndSessionRequest *)request
+    presentingViewController:(UIViewController *)presentingViewController
+                    callback:(OIDEndSessionCallback)callback
+{
+  OIDExternalUserAgentUICoordinatorIOS *coordinator = [[OIDExternalUserAgentUICoordinatorIOS alloc]
+                                                      initWithPresentingViewController:presentingViewController];
+  return [self presentEndSessionRequest:request UICoordinator:coordinator callback:callback];
+}
+
 @end
 
 NS_ASSUME_NONNULL_END

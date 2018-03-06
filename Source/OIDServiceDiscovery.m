@@ -226,6 +226,8 @@ static NSString *const kOPTosURIKey = @"op_tos_uri";
 
 - (nullable NSURL *)endSessionEndpoint {
     return [NSURL URLWithString:_discoveryDictionary[kEndSessionEndpointKey]];
+  //return [NSURL URLWithString:_discoveryDictionary[kAuthorizationEndpointKey]];
+  //return [NSURL URLWithString:[NSString stringWithFormat:@"%@/connect/session/logout", self.issuer]];
 }
 
 - (nullable NSArray<NSString *> *)scopesSupported {
